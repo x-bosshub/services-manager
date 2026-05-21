@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เข้าสู่ระบบ -  Service Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f4f6f9; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .login-card { max-width: 400px; width: 100%; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: none; }
+    </style>
+</head>
+<body>
+    <div class="card login-card p-4">
+        <div class="text-center mb-4">
+            <i class="fa-solid fa-server text-primary mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">เข้าสู่ระบบ ตรวจสอบ Service</h4>
+            <p class="text-muted">กรุณายืนยันตัวตนเพื่อเข้าสู่ระบบ</p>
+        </div>
+        
+        {% if error %}
+        <div class="alert alert-danger text-center shadow-sm py-2"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/">
+            <div class="mb-4">
+                <label class="form-label fw-bold">รหัสผ่าน (Password)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="fa-solid fa-lock text-muted"></i></span>
+                    <input type="password" name="password" class="form-control" placeholder="ใส่รหัสผ่าน..." required autofocus>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 fw-bold py-2"><i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ</button>
+        </form>
+    </div>
+</body>
+</html>
