@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Port Monitor - AiBossHub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        .stat-card { background: white; border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 20px; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-3px); }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .progress-slim { height: 6px; border-radius: 3px; margin-top: 10px; background-color: #e9ecef; }
+        
+        .table-responsive { border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); background: white; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-custom { margin-bottom: 0; white-space: nowrap; }
+        .table-custom th { background-color: #2c3e50; color: white; border: none; padding: 15px; }
+        .table-custom td { padding: 12px 15px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; }
+        .badge-port { font-size: 1rem; padding: 8px 12px; }
+        .action-btn, .browse-btn { width: 90px; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; }
+        
+        .sticky-right { position: -webkit-sticky; position: sticky; right: 0; background-color: #ffffff; box-shadow: -4px 0 8px rgba(0,0,0,0.05); z-index: 1; }
+        th.sticky-right { background-color: #2c3e50; color: white; z-index: 2; }
+        
+        .search-box { max-width: 350px; }
+        .copy-btn { cursor: pointer; color: #6c757d; transition: color 0.2s; }
+        .copy-btn:hover { color: #0d6efd; }
+
+        .high-cpu-row { background-color: rgba(220, 53, 69, 0.08) !important; border-left: 5px solid #dc3545; }
+        .high-ram-row { background-color: rgba(25, 135, 84, 0.08) !important; border-left: 5px solid #198754; }
+        
+        /* สไตล์สำหรับ Editor */
+        .code-editor { background: #272822; color: #f8f8f2; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; border-radius: 8px; width: 100%; height: 350px; padding: 15px; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4 px-3 px-md-4">
+        
+        <!-- Header -->
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+            <div>
+                <h3 class="fw-bold text-dark mb-1"><i class="fa-solid fa-server text-primary me-2"></i>ระบบจัดการ Port & Service</h3>
+                <p class="text-muted mb-0" style="font-size: 0.9rem;">มอนิเตอร์และควบคุม Docker, Systemd และ Process</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <div class="form-check form-switch me-3">
+                    <input class="form-check-input" type="checkbox" id="autoRefreshToggle" style="cursor: pointer;">
+                    <label class="form-check-label text-muted" for="autoRefreshToggle" style="cursor: pointer; font-size: 0.9rem;">Auto Refresh (10s)</label>
+                </div>
+                <!-- ปุ่มสร้าง Service ใหม่ -->
+                <button class="btn btn-success" onclick="openCreateServiceModal()"><i class="fa-solid fa-plus"></i> สร้าง Service ใหม่</button>
+                <a href="/" class="btn btn-outline-primary"><i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูล</a>
+                <a href="/logout" class="btn btn-danger"><i class="fa-solid fa-power-off"></i> ออกจากระบบ</a>
+            </div>
+        </div>
+
+        <!-- Dashboard สรุปทรัพยากรระบบ -->
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3 mb-md-0">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 fw-bold" style="font-size: 0.85rem; text-transform: uppercase;">CPU Usage</p>
+                            <h4 class="mb-0 fw-bold" id="dash-cpu-val">--%</h4>
+                            <small class="text-muted" style="font-size: 0.75rem;">System Uptime: <span id="server-uptime-val" class="fw-bold text-primary">--</span></small>
+                        </div>
+                        <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="fa-solid fa-microchip"></i></div>
+                    </div>
+                    <div class="progress progress-slim">
+                        <div id="dash-cpu-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3 mb-md-0">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 fw-bold" style="font-size: 0.85rem; text-transform: uppercase;">RAM Usage</p>
+                            <h4 class="mb-0 fw-bold" id="dash-ram-val">-- / -- GB</h4>
+                        </div>
+                        <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="fa-solid fa-memory"></i></div>
+                    </div>
+                    <div class="progress progress-slim">
+                        <div id="dash-ram-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 fw-bold" style="font-size: 0.85rem; text-transform: uppercase;">Disk Storage</p>
+                            <h4 class="mb-0 fw-bold" id="dash-disk-val">-- / -- GB</h4>
+                        </div>
+                        <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="fa-solid fa-hard-drive"></i></div>
+                    </div>
+                    <div class="progress progress-slim">
+                        <div id="dash-disk-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- แถบเครื่องมือค้นหาตาราง -->
+        <div class="row mb-3">
+            <div class="col-12 col-md-4">
+                <div class="input-group search-box">
+                    <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control" placeholder="ค้นหา Port, Process, IP..." onkeyup="filterTable()">
+                </div>
+            </div>
+        </div>
+
+        <!-- ตารางแสดง Process -->
+        <div class="table-responsive">
+            <table class="table table-hover table-custom" id="portsTable">
+                <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>IP Address</th>
+                        <th>PID</th>
+                        <th>Process Name</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Uptime</th>
+                        <th>Command / File Path</th>
+                        <th class="text-center sticky-right">จัดการ (Actions)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in ports %}
+                    <tr class="port-row" data-cpu="{{ p.cpu }}" data-ram="{{ p.ram }}">
+                        <td><span class="badge bg-primary badge-port shadow-sm">{{ p.port }}</span></td>
+                        <td><code>{{ p.ip }}</code></td>
+                        <td><span class="badge bg-light text-dark border">{{ p.pid }}</span></td>
+                        <td>
+                            {% if p.container_name %}
+                                <span class="badge bg-info text-dark mb-1"><i class="fa-brands fa-docker"></i> Docker</span><br>
+                                <small class="text-primary fw-bold" style="font-size: 0.85rem;">{{ p.container_name }}</small>
+                            {% elif p.service_name %}
+                                <span class="badge bg-secondary mb-1"><i class="fa-solid fa-microchip"></i> {{ p.process }}</span><br>
+                                <small class="text-success fw-bold" style="font-size: 0.85rem;"><i class="fa-solid fa-gear"></i> {{ p.service_name }}</small>
+                            {% else %}
+                                <span class="badge bg-secondary"><i class="fa-solid fa-microchip"></i> {{ p.process }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="cpu-cell"><span class="text-danger fw-bold">{{ p.cpu }}%</span></td>
+                        <td class="ram-cell"><span class="text-success fw-bold">{{ p.ram }} MB</span></td>
+                        <td><small class="text-muted fw-bold"><i class="fa-regular fa-clock me-1"></i>{{ p.uptime }}</small></td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <small class="text-dark text-truncate" style="max-width: 200px; display: inline-block;" title="{{ p.command }}">{{ p.command }}</small>
+                                <i class="fa-regular fa-copy ms-2 copy-btn" onclick="copyToClipboard('{{ p.command|escape }}')" title="คัดลอกคำสั่ง"></i>
+                            </div>
+                        </td>
+                        <td class="text-center sticky-right">
+                            <button class="btn btn-sm btn-info text-white browse-btn" onclick="openPortUrl({{ p.port }})" title="เปิดหน้าเว็บ">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Browse
+                            </button><br>
+
+                            {% if p.container_name %}
+                                <button class="btn btn-sm btn-outline-success action-btn" onclick="viewLog('docker', '{{ p.container_name }}')" title="ดู Log"><i class="fa-solid fa-list-ul"></i> ดู Log</button><br>
+                                <button class="btn btn-sm btn-outline-primary action-btn" onclick="executeAction('restart', 'docker', '{{ p.container_name }}')"><i class="fa-solid fa-rotate-right"></i> Restart</button><br>
+                                <button class="btn btn-sm btn-outline-danger action-btn" onclick="executeAction('stop', 'docker', '{{ p.container_name }}')"><i class="fa-solid fa-stop"></i> Stop</button>
+                            {% elif p.service_name %}
+                                <button class="btn btn-sm btn-outline-success action-btn" onclick="viewLog('service', '{{ p.service_name }}')" title="ดู Log"><i class="fa-solid fa-list-ul"></i> ดู Log</button><br>
+                                <button class="btn btn-sm btn-outline-dark action-btn" onclick="viewService('{{ p.service_name }}')" title="ดูไฟล์ Service"><i class="fa-solid fa-file-code"></i> อ่านไฟล์</button><br>
+                                <!-- ปุ่มแก้ไข Service -->
+                                <button class="btn btn-sm btn-outline-primary action-btn" onclick="openEditServiceModal('{{ p.service_name }}')" title="แก้ไขเนื้อหาไฟล์"><i class="fa-solid fa-pen-to-square"></i> แก้ไข</button><br>
+                                <button class="btn btn-sm btn-outline-warning action-btn" onclick="executeAction('restart', 'service', '{{ p.service_name }}')"><i class="fa-solid fa-rotate-right"></i> Restart</button><br>
+                                <button class="btn btn-sm btn-outline-danger action-btn" onclick="executeAction('stop', 'service', '{{ p.service_name }}')"><i class="fa-solid fa-stop"></i> Stop</button>
+                            {% else %}
+                                <button class="btn btn-sm btn-danger action-btn" onclick="executeAction('kill', 'process', '{{ p.pid }}')"><i class="fa-solid fa-skull-crossbones"></i> Kill</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Templates สำเร็จรูปสำหรับการสร้าง Service -->
+    <script>
+        const serviceTemplates = {
+            "python": `[Unit]
+Description=My Python Flask App
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/path/to/your/project
+ExecStart=/usr/bin/python3 app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target`,
+            "nodejs": `[Unit]
+Description=My Node.js App
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/path/to/your/project
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production PORT=3000
+
+[Install]
+WantedBy=multi-user.target`,
+            "gunicorn": `[Unit]
+Description=Gunicorn instance to serve Flask App
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/path/to/your/project
+ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 wsgi:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target`
+        };
+
+        // ฟังก์ชันเมื่อเปลี่ยน Template ใน Dropdown
+        function applyTemplate() {
+            let select = document.getElementById('templateSelect');
+            let editor = document.getElementById('serviceContentEditor');
+            if(select.value && serviceTemplates[select.value]) {
+                editor.value = serviceTemplates[select.value];
+            } else {
+                editor.value = `[Unit]\nDescription=My Custom Service\n\n[Service]\nExecStart=/path/to/start\n\n[Install]\nWantedBy=multi-user.target`;
+            }
+        }
+    </script>
+
+    <script>
+        // System Stats & Highlight Auto Refresh
+        async function fetchSystemStats() {
+            try {
+                const response = await fetch('/system_stats');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    document.getElementById('dash-cpu-val').innerText = `${data.cpu_percent}%`;
+                    document.getElementById('server-uptime-val').innerText = data.server_uptime;
+                    document.getElementById('dash-cpu-bar').style.width = `${data.cpu_percent}%`;
+                    document.getElementById('dash-cpu-bar').className = `progress-bar ${data.cpu_percent > 80 ? 'bg-danger' : 'bg-primary'}`;
+
+                    document.getElementById('dash-ram-val').innerText = `${data.ram_used_gb} / ${data.ram_total_gb} GB`;
+                    document.getElementById('dash-ram-bar').style.width = `${data.ram_percent}%`;
+                    document.getElementById('dash-ram-bar').className = `progress-bar ${data.ram_percent > 80 ? 'bg-danger' : 'bg-success'}`;
+
+                    document.getElementById('dash-disk-val').innerText = `${data.disk_used_gb} / ${data.disk_total_gb} GB`;
+                    document.getElementById('dash-disk-bar').style.width = `${data.disk_percent}%`;
+                    document.getElementById('dash-disk-bar').className = `progress-bar ${data.disk_percent > 85 ? 'bg-danger' : 'bg-warning'}`;
+                }
+            } catch (error) {}
+        }
+
+        function highlightMaxUsage() {
+            let rows = document.querySelectorAll(".port-row");
+            let maxCpu = 0; let maxRam = 0;
+            let maxCpuRow = null; let maxRamRow = null;
+            rows.forEach(row => {
+                row.classList.remove("high-cpu-row", "high-ram-row");
+                let badge = row.querySelector(".top-usage-badge");
+                if (badge) badge.remove();
+                let cpu = parseFloat(row.getAttribute("data-cpu")) || 0;
+                let ram = parseFloat(row.getAttribute("data-ram")) || 0;
+                if (cpu > maxCpu && cpu > 0) { maxCpu = cpu; maxCpuRow = row; }
+                if (ram > maxRam && ram > 0) { maxRam = ram; maxRamRow = row; }
+            });
+            if (maxCpuRow) {
+                maxCpuRow.classList.add("high-cpu-row");
+                maxCpuRow.querySelector(".cpu-cell").innerHTML += ' <span class="badge bg-danger top-usage-badge" style="font-size:0.65rem;"><i class="fa-solid fa-fire"></i> MAX CPU</span>';
+            }
+            if (maxRamRow) {
+                if (!maxRamRow.classList.contains("high-cpu-row")) maxRamRow.classList.add("high-ram-row");
+                maxRamRow.querySelector(".ram-cell").innerHTML += ' <span class="badge bg-success top-usage-badge" style="font-size:0.65rem;"><i class="fa-solid fa-triangle-exclamation"></i> MAX RAM</span>';
+            }
+        }
+
+        fetchSystemStats(); setInterval(fetchSystemStats, 3000); highlightMaxUsage();
+
+        // Utilities
+        function openPortUrl(port) { window.open(`http://${window.location.hostname}:${port}`, '_blank'); }
+        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => { Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'คัดลอกแล้ว', showConfirmButton: false, timer: 1500 }); }); }
+        function filterTable() {
+            let input = document.getElementById("searchInput").value.toLowerCase();
+            document.querySelectorAll(".port-row").forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(input) ? "" : "none";
+            });
+        }
+
+        // Auto Refresh Logic
+        let refreshInterval;
+        const toggleSwitch = document.getElementById('autoRefreshToggle');
+        if (localStorage.getItem('autoRefresh') === 'true') { toggleSwitch.checked = true; startAutoRefresh(); }
+        toggleSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                localStorage.setItem('autoRefresh', 'true'); startAutoRefresh();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'เปิด Auto Refresh', showConfirmButton: false, timer: 2000 });
+            } else {
+                localStorage.setItem('autoRefresh', 'false'); clearInterval(refreshInterval);
+                Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'ปิด Auto Refresh', showConfirmButton: false, timer: 2000 });
+            }
+        });
+        function startAutoRefresh() { refreshInterval = setInterval(() => { if (document.getElementById("searchInput").value === "" && !Swal.isVisible()) location.reload(); }, 10000); }
+
+        // ============================================
+        // ฟังก์ชันจัดการ Service (Create, Edit, Save)
+        // ============================================
+
+        // ส่ง Request บันทึกไฟล์ไปยัง Backend
+        async function submitSaveService(serviceName, content, isNew) {
+            Swal.fire({ title: 'กำลังบันทึกและ Reload...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            try {
+                const formData = new FormData();
+                formData.append('service_name', serviceName);
+                formData.append('content', content);
+                formData.append('is_new', isNew);
+                
+                const response = await fetch('/save_service', { method: 'POST', body: formData });
+                const resData = await response.json();
+                
+                if (resData.status === 'success') {
+                    await Swal.fire('สำเร็จ!', resData.message, 'success');
+                    location.reload(); // รีเฟรชเพื่อดู Service ใหม่
+                } else {
+                    Swal.fire('ข้อผิดพลาด', resData.message, 'error');
+                }
+            } catch (error) {
+                Swal.fire('การเชื่อมต่อล้มเหลว', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error');
+            }
+        }
+
+        // 1. หน้าต่างสร้าง Service ใหม่
+        function openCreateServiceModal() {
+            Swal.fire({
+                title: '<i class="fa-solid fa-plus-circle text-success"></i> สร้าง Service ใหม่',
+                html: `
+                    <div class="text-start mb-3">
+                        <label class="fw-bold mb-1">ชื่อ Service (เช่น myapp.service)</label>
+                        <input type="text" id="newServiceName" class="form-control" placeholder="app_name.service">
+                    </div>
+                    <div class="text-start mb-3">
+                        <label class="fw-bold mb-1">เลือกตัวช่วย (Template)</label>
+                        <select id="templateSelect" class="form-select" onchange="applyTemplate()">
+                            <option value="">-- เลือกรูปแบบ หรือเขียนเอง --</option>
+                            <option value="python">Python Flask / Script</option>
+                            <option value="nodejs">Node.js Server</option>
+                            <option value="gunicorn">Gunicorn Web Server</option>
+                        </select>
+                    </div>
+                    <div class="text-start">
+                        <label class="fw-bold mb-1">เนื้อหาไฟล์ Service</label>
+                        <textarea id="serviceContentEditor" class="code-editor" spellcheck="false">[Unit]
+Description=My Custom Service
+
+[Service]
+ExecStart=/path/to/start
+
+[Install]
+WantedBy=multi-user.target</textarea>
+                    </div>
+                `,
+                width: '800px',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึกและติดตั้ง',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#198754',
+                preConfirm: () => {
+                    const name = document.getElementById('newServiceName').value;
+                    const content = document.getElementById('serviceContentEditor').value;
+                    if (!name) { Swal.showValidationMessage('กรุณาระบุชื่อ Service'); return false; }
+                    return { name, content };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    submitSaveService(result.value.name, result.value.content, true);
+                }
+            });
+        }
+
+        // 2. หน้าต่างแก้ไข Service เดิม
+        async function openEditServiceModal(serviceName) {
+            Swal.fire({ title: 'กำลังดึงข้อมูลไฟล์...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            try {
+                const formData = new FormData(); formData.append('service_name', serviceName);
+                const response = await fetch('/service_info', { method: 'POST', body: formData });
+                const resData = await response.json();
+                
+                if (resData.status === 'success') {
+                    Swal.fire({
+                        title: `<i class="fa-solid fa-pen-to-square text-primary"></i> แก้ไข: ${serviceName}`,
+                        html: `
+                            <div class="text-start mb-2" style="font-size: 0.85rem; color: #6c757d;">
+                                <strong>Path:</strong> <code>${resData.filepath}</code>
+                            </div>
+                            <textarea id="editServiceContent" class="code-editor" spellcheck="false">${resData.content}</textarea>
+                        `,
+                        width: '800px',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึก (Save & Reload)',
+                        cancelButtonText: 'ยกเลิก',
+                        confirmButtonColor: '#0d6efd',
+                        preConfirm: () => {
+                            const content = document.getElementById('editServiceContent').value;
+                            return content;
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            submitSaveService(serviceName, result.value, false);
+                        }
+                    });
+                } else { Swal.fire('ข้อผิดพลาด', resData.message, 'error'); }
+            } catch (error) { Swal.fire('การเชื่อมต่อล้มเหลว', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error'); }
+        }
+
+        // ============================================
+        // ฟังก์ชันดูไฟล์, ดู Log, จัดการ Process
+        // ============================================
+        
+        async function viewService(serviceName) {
+            Swal.fire({ title: 'กำลังดึงข้อมูล...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            try {
+                const formData = new FormData(); formData.append('service_name', serviceName);
+                const response = await fetch('/service_info', { method: 'POST', body: formData });
+                const resData = await response.json();
+                if (resData.status === 'success') {
+                    Swal.fire({
+                        title: `<span style="font-size: 1.1rem; color: #2c3e50;"><i class="fa-solid fa-file-code text-primary"></i> ${serviceName}</span>`,
+                        html: `<div class="text-start mb-2" style="font-size: 0.85rem; color: #6c757d;"><strong>Path:</strong> <code>${resData.filepath}</code></div>
+                               <pre class="text-start p-3" style="background: #272822; color: #f8f8f2; border-radius: 8px; font-size: 0.85rem; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">${resData.content}</pre>`,
+                        width: '800px', showCloseButton: true, showConfirmButton: false
+                    });
+                } else { Swal.fire('ข้อผิดพลาด', resData.message, 'error'); }
+            } catch (error) { Swal.fire('การเชื่อมต่อล้มเหลว', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error'); }
+        }
+
+        async function viewLog(type, target) {
+            Swal.fire({ title: 'กำลังดึง Log ล่าสุด...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            try {
+                const formData = new FormData(); formData.append('type', type); formData.append('target', target);
+                const response = await fetch('/view_log', { method: 'POST', body: formData });
+                const resData = await response.json();
+                if (resData.status === 'success') {
+                    let titleIcon = type === 'docker' ? '<i class="fa-brands fa-docker text-info"></i>' : '<i class="fa-solid fa-microchip text-success"></i>';
+                    Swal.fire({
+                        title: `<span style="font-size: 1.1rem; color: #2c3e50;">${titleIcon} Log: ${target}</span>`,
+                        html: `<div class="text-start mb-2" style="font-size: 0.85rem; color: #6c757d;">แสดงข้อมูล 100 บรรทัดล่าสุด</div>
+                               <pre id="logContainer" class="text-start p-3" style="background: #1e1e1e; color: #00ff00; border-radius: 8px; font-size: 0.85rem; height: 500px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">${resData.log}</pre>`,
+                        width: '900px', showCloseButton: true, showConfirmButton: false,
+                        didOpen: () => { let logDiv = document.getElementById('logContainer'); if (logDiv) logDiv.scrollTop = logDiv.scrollHeight; }
+                    });
+                } else { Swal.fire('ข้อผิดพลาด', resData.message, 'error'); }
+            } catch (error) { Swal.fire('การเชื่อมต่อล้มเหลว', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error'); }
+        }
+
+        async function executeAction(action, type, target) {
+            let actionText = action === 'kill' ? 'บังคับปิด (Kill)' : (action === 'restart' ? 'รีสตาร์ท' : 'หยุดทำงาน');
+            let iconType = action === 'kill' || action === 'stop' ? 'warning' : 'question';
+            let confirmBtnColor = action === 'kill' || action === 'stop' ? '#d33' : '#3085d6';
+            
+            let confirmTarget = target;
+            if (type === 'docker') confirmTarget = `Docker: <br><b class="text-primary">${target}</b>`;
+            else if (type === 'service') confirmTarget = `Service: <br><b class="text-success">${target}</b>`;
+            else confirmTarget = `Process PID: <br><b class="text-danger">${target}</b>`;
+
+            const result = await Swal.fire({
+                title: `ยืนยันการ${actionText}?`, html: `เป้าหมาย: ${confirmTarget}`, icon: iconType,
+                showCancelButton: true, confirmButtonColor: confirmBtnColor, cancelButtonColor: '#6c757d',
+                confirmButtonText: `ใช่, ${actionText}เลย!`, cancelButtonText: 'ยกเลิก'
+            });
+
+            if (!result.isConfirmed) return;
+            Swal.fire({ title: 'กำลังดำเนินการ...', html: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            try {
+                const formData = new FormData(); formData.append('action', action); formData.append('type', type); formData.append('target', target);
+                const response = await fetch('/action', { method: 'POST', body: formData });
+                const resData = await response.json();
+                if (resData.status === 'success') {
+                    await Swal.fire('สำเร็จ!', resData.message, 'success'); location.reload();
+                } else { Swal.fire('ข้อผิดพลาด!', resData.message || 'ไม่สามารถสั่งการได้', 'error'); }
+            } catch (error) { Swal.fire('การเชื่อมต่อล้มเหลว!', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error'); }
+        }
+    </script>
+</body>
+</html>
