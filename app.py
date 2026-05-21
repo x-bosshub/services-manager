@@ -7,10 +7,14 @@ import re
 import secrets
 import time
 from datetime import timedelta, datetime
+from dotenv import load_dotenv
+
+# โหลดตัวแปรตั้งค่าจากไฟล์ .env
+load_dotenv()
 
 app = Flask(__name__)
 
-# 1. แก้ปัญหา Secret Key: ให้สุ่มสร้างครั้งแรกและบันทึกลงไฟล์ secret.key 
+# 1. จัดการ Secret Key สำหรับ Session
 SECRET_FILE = 'secret.key'
 if os.path.exists(SECRET_FILE):
     with open(SECRET_FILE, 'rb') as f:
@@ -21,12 +25,13 @@ else:
         f.write(new_key)
     app.secret_key = new_key
 
-# 2. แก้ปัญหา Session ไม่มีวันหมดอายุ: บังคับให้ Session หมดอายุภายใน 60 นาที
+# 2. บังคับให้ Session หมดอายุภายใน 60 นาที
 app.permanent_session_lifetime = timedelta(minutes=60)
 
-DEFAULT_PASSWORD = "password" # ตั้งรหัสผ่าน
-DEBUG_APP = False
-PORT = 5000
+# 3. ดึงการตั้งค่าจากไฟล์ .env (หากไม่มีให้ใช้ค่าเริ่มต้นเป็น admin1234)
+DEFAULT_PASSWORD = os.environ.get('DASHBOARD_PASS', 'admin1234')
+DEBUG_APP = os.environ.get('DEBUG_APP', 'False').lower() == 'true'
+PORT = int(os.environ.get('PORT', 8000))
 
 def format_uptime(seconds):
     """แปลงวินาทีให้อยู่ในรูปแบบ วัน ชม. นาที ที่อ่านง่าย"""
@@ -346,4 +351,8 @@ if __name__ == '__main__':
         print("คำแนะนำ: กด Ctrl+C แล้วรันใหม่ด้วยคำสั่ง 'sudo python3 app.py'")
         print("="*60 + "\n")
         
+    # หากรันไม่ได้รหัสผ่าน .env ระบบจะเตือนใน Console
+    if not os.environ.get('DASHBOARD_PASS'):
+        print("[INFO] ไม่พบไฟล์ .env ระบบจะใช้รหัสผ่านชั่วคราว: admin1234")
+
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG_APP)
